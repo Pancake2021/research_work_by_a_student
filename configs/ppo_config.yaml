@@ -1,0 +1,50 @@
+# ============================================================
+# PPO Training Config
+# ВНИМАНИЕ: PPO требует ~2× больше VRAM чем GRPO.
+# На T4 (16GB) — используй batch_size=2, gradient_checkpointing=true
+# На A100 (40GB) — стандартные настройки ниже
+# ============================================================
+
+model:
+  name: "unsloth/Qwen2.5-1.5B-Instruct"
+  max_seq_length: 2048
+  load_in_4bit: true
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+ppo:
+  output_dir: "./outputs/ppo"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4 # уменьши до 2 на T4
+  gradient_accumulation_steps: 4
+  learning_rate: 5.0e-6
+  gradient_checkpointing: true # КРИТИЧНО для T4
+  bf16: true
+  fp16: false
+  seed: 42
+  report_to: "wandb"
+
+  # PPO-специфические параметры
+  kl_penalty: "kl" # 'kl' | 'abs' | 'mse'
+  init_kl_coef: 0.1 # начальный коэффициент KL
+  adap_kl_ctrl: true # адаптивный KL-контроль
+  target_kl: 6.0 # целевое KL
+
+reward_function: "reasoning"
+
+dataset:
+  name: "iemocap"
+  train_size: 500
+  test_size: 100
+  seed: 42

@@ -1,0 +1,55 @@
+# ============================================================
+# GRPO Training Config
+# Оптимизировано для Google Colab T4 (16GB VRAM)
+# ============================================================
+
+model:
+  name: "unsloth/Qwen2.5-1.5B-Instruct"
+  max_seq_length: 2048
+  load_in_4bit: true
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+grpo:
+  output_dir: "./outputs/grpo"
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4    # effective_batch = 4*4 = 16
+  learning_rate: 5.0e-6
+  num_generations: 8                # G — группа ответов (ключевая идея GRPO)
+  max_new_tokens: 256
+  max_prompt_length: 512
+  logging_steps: 10
+  save_steps: 100
+  eval_steps: 50
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  bf16: true
+  fp16: false
+  seed: 42
+  report_to: "wandb"
+
+# Доступные reward functions: accuracy | reasoning | binary | entropy | lambda_grpo
+reward_function: "reasoning"
+
+dataset:
+  name: "iemocap"              # iemocap | cmu_mosi | local_json | synthetic
+  train_size: 500
+  test_size: 100
+  seed: 42
+
+# Для T4 с ограниченной памятью:
+# - уменьши per_device_train_batch_size до 2
+# - уменьши num_generations до 4
+# - включи: gradient_checkpointing: true

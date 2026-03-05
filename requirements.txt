@@ -1,0 +1,44 @@
+# ======================================================
+# Core ML / LLM Training
+# ======================================================
+unsloth>=2024.12.0          # Fast LLM fine-tuning on GPU
+transformers>=4.46.0        # HuggingFace Transformers
+trl>=0.12.0                 # PPO / GRPO / RLHF trainers
+datasets>=3.0.0             # HuggingFace Datasets
+accelerate>=1.0.0           # Multi-GPU / distributed training
+peft>=0.13.0                # LoRA / QLoRA adapters
+
+# ======================================================
+# Quantization & Memory Optimization
+# ======================================================
+bitsandbytes>=0.44.0        # 4-bit / 8-bit quantization
+sentencepiece>=0.2.0        # Tokenization
+
+# ======================================================
+# Evaluation & Metrics
+# ======================================================
+scikit-learn>=1.5.0         # accuracy_score, f1_score, classification_report
+evaluate>=0.4.0             # HuggingFace evaluate (BLEU, ROUGE, etc.)
+numpy>=1.26.0
+pandas>=2.0.0
+
+# ======================================================
+# Logging & Experiment Tracking
+# ======================================================
+wandb>=0.18.0               # Weights & Biases experiment tracking
+
+# ======================================================
+# Visualization
+# ======================================================
+matplotlib>=3.8.0
+plotly>=5.18.0
+kaleido>=0.2.1              # Static image export for plotly
+
+# ======================================================
+# Utilities
+# ======================================================
+python-dotenv>=1.0.0        # .env file loading
+pyyaml>=6.0                 # YAML config files
+tqdm>=4.66.0                # Progress bars
+rich>=13.0.0                # Beautiful terminal output
+typer>=0.12.0               # CLI argument parsing
