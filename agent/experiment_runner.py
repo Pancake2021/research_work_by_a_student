@@ -62,7 +62,10 @@ else
   git pull --ff-only || true
 fi
 cd {shlex.quote(repo_dir)}
-pip -q install -r requirements.txt flask requests pyngrok psutil
+python -m pip install -q --upgrade pip setuptools wheel
+python -m pip install -q --ignore-installed blinker
+python -m pip install -q flask requests pyngrok psutil
+python -m pip install -q -r requirements.txt
 """.strip()
     resp = client.execute_cell(cmd, timeout=2400, wait=True)
     if resp.get("status") != "ok":

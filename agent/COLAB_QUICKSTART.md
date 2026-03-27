@@ -2,7 +2,9 @@
 
 ## 1) Первая ячейка в Google Colab
 ```python
-!pip -q install flask pyngrok psutil requests
+!python -m pip install -q --upgrade pip setuptools wheel
+!python -m pip install -q --ignore-installed blinker
+!python -m pip install -q flask pyngrok psutil requests
 !git clone https://github.com/Pancake2021/research_work_by_a_student.git /content/research_work_by_a_student || true
 
 import os
