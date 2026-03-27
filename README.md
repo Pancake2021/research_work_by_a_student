@@ -111,6 +111,20 @@ python scripts/run_evaluation.py --checkpoint ./grpo_output
 
 ---
 
+## Запуск Через Colab MCP (Удалённо)
+
+Для запуска экспериментов в Google Colab (GPU/TPU) используй:
+
+1. Colab сервер: `agent/colab_mcp_server.py`
+2. Локальный оркестратор: `python -m agent.experiment_runner ...`
+
+Подробный quickstart:
+[`agent/COLAB_QUICKSTART.md`](agent/COLAB_QUICKSTART.md)
+
+`run_full_pipeline.py` печатает machine-readable JSON-события в stdout для устойчивого парсинга метрик агентом.
+
+---
+
 ## Reward Functions
 
 | RF | Описание | Диапазон | Когда использовать |

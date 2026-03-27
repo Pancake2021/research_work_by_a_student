@@ -13,13 +13,12 @@ DAPO — модификация GRPO с entropy bonus и CLIP-higher для бо
   - GRPO paper:  https://arxiv.org/abs/2402.03300
 """
 
-import os
-from typing import Optional, Callable
+from typing import Optional
 from dataclasses import dataclass
 
 from datasets import Dataset
-from src.data.data_utils import logger, check_gpu
-from src.training.grpo_trainer import GRPOTrainingConfig, _setup_wandb
+from src.data.data_utils import logger
+from src.training.grpo_trainer import GRPOTrainingConfig
 
 
 # ──────────────────────────────────────────────────────────────────────────────

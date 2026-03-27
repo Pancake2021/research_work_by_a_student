@@ -10,14 +10,15 @@ baseline_eval.py
 import time
 from typing import List, Optional, Dict, Any
 
-import torch
-from datasets import Dataset
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    classification_report,
-    confusion_matrix,
-)
+try:
+    import torch
+except ImportError:  # pragma: no cover
+    torch = None
+
+try:
+    from datasets import Dataset
+except ImportError:  # pragma: no cover
+    Dataset = Any
 
 from src.data.preprocessor import parse_label, build_chat_prompt
 from src.data.data_utils import logger, save_results_json
@@ -49,6 +50,9 @@ def run_inference(
     Returns:
         Список сырых строк — ответов модели (или None при ошибке)
     """
+    if torch is None:
+        raise ImportError("torch is required for inference. Install project dependencies.")
+
     model.eval()
     responses = []
 
@@ -74,7 +78,8 @@ def run_inference(
             )
 
         for idx, output in enumerate(outputs):
-            input_len = inputs["input_ids"].shape[1]
+            # Use true prompt length for each sample (important with padding).
+            input_len = int(inputs["attention_mask"][idx].sum().item())
             new_tokens = output[input_len:]
             decoded = tokenizer.decode(new_tokens, skip_special_tokens=True)
             responses.append(decoded)
@@ -100,6 +105,12 @@ def evaluate_predictions(
     Returns:
         dict с accuracy, f1_weighted, f1_macro, classification_report
     """
+    from sklearn.metrics import (
+        accuracy_score,
+        f1_score,
+        classification_report,
+    )
+
     # None → "unknown" для корректного подсчёта
     preds_clean = [p if p in label_names else "unknown" for p in predicted_labels]
 

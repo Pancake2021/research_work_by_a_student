@@ -22,15 +22,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
+if load_dotenv is not None:
+    load_dotenv()
 
 from src.data.data_utils import logger, seed_everything
 from src.data.dataset_loader import load_behavior_dataset
-from src.models.model_loader import load_model, prepare_for_inference
 from src.evaluation.evaluator import evaluate_checkpoint, compare_methods
 from src.evaluation.error_analysis import analyze_errors
-from src.visualization.plots import plot_all_from_results, plot_radar_chart
 
 
 def parse_args():
@@ -41,8 +44,14 @@ def parse_args():
     parser.add_argument("--grpo",  help="Чекпоинт GRPO")
     parser.add_argument("--ppo",   help="Чекпоинт PPO")
     parser.add_argument("--dapo",  help="Чекпоинт DAPO")
+    parser.add_argument("--lambda-grpo", dest="lambda_grpo", help="Чекпоинт λ-GRPO")
     parser.add_argument("--baseline", help="Базовая модель (без RL)")
     parser.add_argument("--dataset", default="iemocap")
+    parser.add_argument(
+        "--dataset-path",
+        default=None,
+        help="Локальный путь к JSON/JSONL/CSV (используется при --dataset local_json)",
+    )
     parser.add_argument("--test-size", type=int, default=100)
     parser.add_argument("--output-dir", default="./outputs")
     parser.add_argument("--seed", type=int, default=42)
@@ -90,7 +99,7 @@ def evaluate_one(checkpoint_path, method_name, test_dataset, output_dir):
     )
 
     # Анализ ошибок
-    from src.data.preprocessor import parse_label, build_chat_prompt
+    from src.data.preprocessor import parse_label
     from src.models.baseline_eval import run_inference
     examples = [{"text": ex["text"]} for ex in test_dataset]
     responses = run_inference(model, tokenizer, examples)
@@ -113,6 +122,7 @@ def main():
         train_size=10,  # только для структуры
         test_size=args.test_size,
         seed=args.seed,
+        local_json_path=args.dataset_path,
     )
     test_dataset = dataset["test"]
 
@@ -123,6 +133,7 @@ def main():
         if args.grpo:     checkpoints["grpo"]        = args.grpo
         if args.ppo:      checkpoints["ppo"]         = args.ppo
         if args.dapo:     checkpoints["dapo"]        = args.dapo
+        if args.lambda_grpo: checkpoints["lambda_grpo"] = args.lambda_grpo
 
         for method_name, checkpoint_path in checkpoints.items():
             result = evaluate_one(checkpoint_path, method_name, test_dataset, args.output_dir)
@@ -130,6 +141,8 @@ def main():
                 all_results.append(result)
 
         if all_results:
+            from src.visualization.plots import plot_all_from_results, plot_radar_chart
+
             comparison = compare_methods(all_results)
             plot_all_from_results(all_results)
 
