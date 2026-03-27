@@ -9,10 +9,12 @@ import os
 import time
 from typing import Dict, List, Optional, Any
 
-from datasets import Dataset
-from sklearn.metrics import accuracy_score, f1_score, classification_report
+try:
+    from datasets import Dataset
+except ImportError:  # pragma: no cover
+    Dataset = Any
 
-from src.data.preprocessor import parse_label, build_chat_prompt
+from src.data.preprocessor import parse_label
 from src.data.data_utils import logger, save_results_json
 from src.models.baseline_eval import run_inference, evaluate_predictions
 

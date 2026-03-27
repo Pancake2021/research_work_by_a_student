@@ -56,7 +56,7 @@ def load_model(
     Returns:
         (model, tokenizer)
     """
-    gpu_info = check_gpu()
+    check_gpu()
     logger.info(f"Загрузка модели: {model_name}")
     logger.info(f"  4-bit: {load_in_4bit} | max_seq: {max_seq_length} | LoRA: {with_lora}")
 

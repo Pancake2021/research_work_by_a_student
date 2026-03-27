@@ -15,23 +15,64 @@ run_full_pipeline.py
 
 import os
 import sys
-import json
 import argparse
+import json
+import time
 from pathlib import Path
 
 # Добавляем корень проекта в PYTHONPATH
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dotenv import load_dotenv
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    load_dotenv = None
+
+if load_dotenv is not None:
+    load_dotenv()
 
 from src.data.data_utils import logger, check_gpu, seed_everything
 from src.data.dataset_loader import load_behavior_dataset
 from src.models.model_loader import load_model, prepare_for_inference, save_model
 from src.models.baseline_eval import run_baseline_evaluation
 from src.rewards import get_reward_fn
-from src.evaluation.evaluator import evaluate_checkpoint, compare_methods
-from src.visualization.plots import plot_all_from_results, plot_radar_chart
+from src.evaluation.evaluator import compare_methods
+
+_JSON_EMIT_ENABLED = True
+_EVENT_STEP = 0
+
+
+def configure_json_emitter(enabled: bool) -> None:
+    global _JSON_EMIT_ENABLED, _EVENT_STEP
+    _JSON_EMIT_ENABLED = bool(enabled)
+    _EVENT_STEP = 0
+
+
+def _to_jsonable(value):
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _to_jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_jsonable(v) for v in value]
+    try:
+        return float(value)
+    except Exception:
+        return str(value)
+
+
+def emit_event(event: str, **payload) -> None:
+    global _EVENT_STEP
+    if not _JSON_EMIT_ENABLED:
+        return
+    _EVENT_STEP += 1
+    row = {
+        "event": event,
+        "step": _EVENT_STEP,
+        "ts_unix": round(time.time(), 3),
+    }
+    row.update({k: _to_jsonable(v) for k, v in payload.items()})
+    print(json.dumps(row, ensure_ascii=False), flush=True)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -61,6 +102,25 @@ def parse_args():
     parser.add_argument("--test-size", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", default="./outputs")
+    parser.add_argument("--run-id", default="", help="Идентификатор запуска для внешнего оркестратора")
+    parser.add_argument(
+        "--json-metrics",
+        dest="json_metrics",
+        action="store_true",
+        default=True,
+        help="Печатать machine-readable JSON события в stdout",
+    )
+    parser.add_argument(
+        "--no-json-metrics",
+        dest="json_metrics",
+        action="store_false",
+        help="Отключить JSON-события в stdout",
+    )
+    parser.add_argument(
+        "--dataset-path",
+        default=None,
+        help="Локальный путь к JSON/JSONL/CSV (используется при --dataset local_json)",
+    )
     parser.add_argument("--push-to-hub", action="store_true",
         help="Опубликовать модель на HuggingFace Hub")
     parser.add_argument("--hub-repo", default="behavior-analysis-grpo-qwen2.5")
@@ -83,6 +143,7 @@ def step_load_data(args):
         test_size=args.test_size,
         seed=args.seed,
         save_path=f"{args.output_dir}/dataset",
+        local_json_path=args.dataset_path,
     )
     return dataset
 
@@ -181,8 +242,10 @@ def step_train_lambda_grpo(model, tokenizer, dataset, args):
     )
 
 
-def step_compare(model, tokenizer, dataset, args):
+def step_compare(dataset, args):
     """Фаза 7: Сравнение всех методов."""
+    from src.visualization.plots import plot_all_from_results
+
     all_results = []
 
     # Baseline
@@ -205,8 +268,20 @@ def step_compare(model, tokenizer, dataset, args):
 
 def main():
     args = parse_args()
+    configure_json_emitter(args.json_metrics)
+
+    emit_event(
+        "pipeline_started",
+        run_id=args.run_id or None,
+        mode=args.mode,
+        dataset=args.dataset,
+        reward=args.reward,
+        output_dir=args.output_dir,
+    )
+
     seed_everything(args.seed)
-    check_gpu()
+    gpu_info = check_gpu()
+    emit_event("runtime_info", run_id=args.run_id or None, runtime=gpu_info)
 
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(f"{args.output_dir}/results", exist_ok=True)
@@ -216,41 +291,85 @@ def main():
 
     # Загружаем данные
     dataset = step_load_data(args)
+    emit_event(
+        "data_loaded",
+        run_id=args.run_id or None,
+        train_size=len(dataset["train"]),
+        test_size=len(dataset["test"]),
+    )
 
-    if args.mode == "baseline":
-        model, tokenizer = step_load_model(with_lora=False)
-        results = step_baseline(model, tokenizer, dataset, args)
-        logger.info(f"\n✅ Baseline F1: {results['f1_weighted']:.4f}")
+    try:
+        if args.mode == "baseline":
+            model, tokenizer = step_load_model(with_lora=False)
+            results = step_baseline(model, tokenizer, dataset, args)
+            logger.info(f"\n✅ Baseline F1: {results['f1_weighted']:.4f}")
+            emit_event("baseline_complete", run_id=args.run_id or None, mode=args.mode, metrics=results)
 
-    elif args.mode == "grpo":
-        model, tokenizer = step_load_model(with_lora=True)
-        train_results = step_train_grpo(model, tokenizer, dataset, args)
+        elif args.mode == "grpo":
+            model, tokenizer = step_load_model(with_lora=True)
+            train_results = step_train_grpo(model, tokenizer, dataset, args)
 
-        # Сохраняем модель
-        save_model(model, tokenizer, f"{args.output_dir}/grpo/best_model")
+            save_model(model, tokenizer, f"{args.output_dir}/grpo/best_model")
+            emit_event(
+                "training_complete",
+                run_id=args.run_id or None,
+                mode=args.mode,
+                reward=args.reward,
+                metrics=train_results,
+                checkpoint_path=f"{args.output_dir}/grpo/best_model",
+            )
 
-        if args.push_to_hub:
-            from src.models.model_loader import push_to_hub
-            push_to_hub(model, tokenizer, args.hub_repo)
+            if args.push_to_hub:
+                from src.models.model_loader import push_to_hub
+                push_to_hub(model, tokenizer, args.hub_repo)
 
-    elif args.mode == "ppo":
-        model, tokenizer = step_load_model(with_lora=True)
-        step_train_ppo(model, tokenizer, dataset, args)
-        save_model(model, tokenizer, f"{args.output_dir}/ppo/best_model")
+        elif args.mode == "ppo":
+            model, tokenizer = step_load_model(with_lora=True)
+            train_results = step_train_ppo(model, tokenizer, dataset, args)
+            save_model(model, tokenizer, f"{args.output_dir}/ppo/best_model")
+            emit_event(
+                "training_complete",
+                run_id=args.run_id or None,
+                mode=args.mode,
+                reward=args.reward,
+                metrics=train_results,
+                checkpoint_path=f"{args.output_dir}/ppo/best_model",
+            )
 
-    elif args.mode == "dapo":
-        model, tokenizer = step_load_model(with_lora=True)
-        step_train_dapo(model, tokenizer, dataset, args)
-        save_model(model, tokenizer, f"{args.output_dir}/dapo/best_model")
+        elif args.mode == "dapo":
+            model, tokenizer = step_load_model(with_lora=True)
+            train_results = step_train_dapo(model, tokenizer, dataset, args)
+            save_model(model, tokenizer, f"{args.output_dir}/dapo/best_model")
+            emit_event(
+                "training_complete",
+                run_id=args.run_id or None,
+                mode=args.mode,
+                reward="entropy",
+                metrics=train_results,
+                checkpoint_path=f"{args.output_dir}/dapo/best_model",
+            )
 
-    elif args.mode == "lambda_grpo":
-        model, tokenizer = step_load_model(with_lora=True)
-        step_train_lambda_grpo(model, tokenizer, dataset, args)
-        save_model(model, tokenizer, f"{args.output_dir}/lambda_grpo/best_model")
+        elif args.mode == "lambda_grpo":
+            model, tokenizer = step_load_model(with_lora=True)
+            train_results = step_train_lambda_grpo(model, tokenizer, dataset, args)
+            save_model(model, tokenizer, f"{args.output_dir}/lambda_grpo/best_model")
+            emit_event(
+                "training_complete",
+                run_id=args.run_id or None,
+                mode=args.mode,
+                reward="lambda_grpo",
+                metrics=train_results,
+                checkpoint_path=f"{args.output_dir}/lambda_grpo/best_model",
+            )
 
-    elif args.mode == "compare":
-        model, tokenizer = step_load_model(with_lora=True)
-        step_compare(model, tokenizer, dataset, args)
+        elif args.mode == "compare":
+            comparison = step_compare(dataset, args)
+            emit_event("compare_complete", run_id=args.run_id or None, metrics=comparison)
+
+        emit_event("pipeline_finished", run_id=args.run_id or None, status="success", mode=args.mode)
+    except Exception as exc:
+        emit_event("pipeline_error", run_id=args.run_id or None, mode=args.mode, error=str(exc))
+        raise
 
     logger.info("\n🎉 Пайплайн завершён успешно!")
 
