@@ -25,7 +25,8 @@ research_work_by_a_student/
 │   ├── 01_baseline.ipynb
 │   ├── 02_grpo_training.ipynb
 │   ├── 03_ppo_training.ipynb
-│   └── 04_evaluation.ipynb
+│   ├── 04_evaluation.ipynb
+│   └── colab_diploma_experiments.ipynb
 ├── scripts/                    # Скрипты запуска
 │   ├── run_full_pipeline.py
 │   └── run_evaluation.py
@@ -111,17 +112,17 @@ python scripts/run_evaluation.py --checkpoint ./grpo_output
 
 ---
 
-## Запуск Через Colab MCP (Удалённо)
+## Запуск Через Единый Colab Notebook
 
-Для запуска экспериментов в Google Colab (GPU/TPU) используй:
+Для стабильного запуска в Colab используй ноутбук:
 
-1. Colab сервер: `agent/colab_mcp_server.py`
-2. Локальный оркестратор: `python -m agent.experiment_runner ...`
+- `notebooks/colab_diploma_experiments.ipynb`
 
-Подробный quickstart:
-[`agent/COLAB_QUICKSTART.md`](agent/COLAB_QUICKSTART.md)
-
-`run_full_pipeline.py` печатает machine-readable JSON-события в stdout для устойчивого парсинга метрик агентом.
+Он включает:
+- устойчивую установку зависимостей (с fix `blinker`)
+- автоматическое обновление ветки `develop`
+- запуск EXP-01..EXP-07 по порядку
+- полное логирование, сохранение данных и построение графиков
 
 ---
 
