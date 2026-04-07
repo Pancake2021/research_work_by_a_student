@@ -11,7 +11,7 @@ fi
 
 DEFAULT_PYTHON="3.12"
 PYTHON_VERSION="$DEFAULT_PYTHON"
-GROUPS=()
+DEP_GROUPS=()
 KNOWN_GROUPS=("local" "colab" "cuda" "dev")
 
 usage() {
@@ -70,25 +70,25 @@ while [[ $# -gt 0 ]]; do
         echo "Allowed groups: ${KNOWN_GROUPS[*]}" >&2
         exit 2
       fi
-      GROUPS+=("$1")
+      DEP_GROUPS+=("$1")
       shift
       ;;
   esac
 done
 
-if [[ ${#GROUPS[@]} -eq 0 ]]; then
-  GROUPS=("local")
+if [[ ${#DEP_GROUPS[@]} -eq 0 ]]; then
+  DEP_GROUPS=("local")
 fi
 
 echo "Creating/updating .venv with Python $PYTHON_VERSION..."
 uv venv --python "$PYTHON_VERSION" .venv
 
 SYNC_ARGS=()
-for g in "${GROUPS[@]}"; do
+for g in "${DEP_GROUPS[@]}"; do
   SYNC_ARGS+=("--group" "$g")
 done
 
-echo "Syncing groups: ${GROUPS[*]}"
+echo "Syncing groups: ${DEP_GROUPS[*]}"
 uv sync "${SYNC_ARGS[@]}"
 
 echo "Done."
