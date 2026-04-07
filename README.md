@@ -126,6 +126,31 @@ python scripts/run_evaluation.py --checkpoint ./grpo_output
 
 ---
 
+## Кастомное Окружение Через uv
+
+В проект добавлен `pyproject.toml` с dependency-группами под разные сценарии запуска.
+
+Быстрая настройка:
+
+```bash
+scripts/setup_uv_env.sh
+```
+
+Это создаст `.venv` и установит группу `local` по умолчанию.
+
+Дополнительно:
+
+```bash
+scripts/setup_uv_env.sh local colab
+scripts/setup_uv_env.sh local cuda
+scripts/setup_uv_env.sh --help
+```
+
+Примечание:
+- группа `cuda` нужна для Linux/CUDA-окружений (Colab GPU), для macOS обычно не подходит.
+
+---
+
 
 ## Ночной Фоновый Запуск На macOS
 

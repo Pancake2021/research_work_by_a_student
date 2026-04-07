@@ -9,6 +9,10 @@ mkdir -p "$STATE_DIR" "$LOG_DIR"
 PID_FILE="$STATE_DIR/runner.pid"
 LOG_FILE="$STATE_DIR/runner.log"
 CMD_FILE="$STATE_DIR/runner.cmd"
+PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="python3"
+fi
 
 usage() {
   cat <<'EOF'
@@ -44,7 +48,7 @@ build_command() {
   ts="$(date +%Y%m%d_%H%M%S)"
 
   if [[ "$profile" == "baseline" ]]; then
-    echo "python scripts/run_full_pipeline.py --mode baseline --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts} --json-metrics $*"
+    echo "$PYTHON_BIN scripts/run_full_pipeline.py --mode baseline --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts} --json-metrics $*"
     return 0
   fi
 
@@ -61,13 +65,13 @@ EOF
 
     # Sequential chain for local attempt (still risky on Apple Silicon).
     echo "bash -lc 'set -e; \
-      python scripts/run_full_pipeline.py --mode baseline --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp01 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode grpo --reward accuracy --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp02 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode grpo --reward reasoning --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp03 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode grpo --reward binary --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp04 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode ppo --reward reasoning --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp05 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode dapo --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp06 --json-metrics; \
-      python scripts/run_full_pipeline.py --mode lambda_grpo --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp07 --json-metrics'"
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode baseline --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp01 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode grpo --reward accuracy --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp02 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode grpo --reward reasoning --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp03 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode grpo --reward binary --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp04 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode ppo --reward reasoning --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp05 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode dapo --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp06 --json-metrics; \
+      $PYTHON_BIN scripts/run_full_pipeline.py --mode lambda_grpo --dataset synthetic --train-size 300 --test-size 100 --output-dir ./outputs/nightly_${ts}_exp07 --json-metrics'"
     return 0
   fi
 
