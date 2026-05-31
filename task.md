@@ -31,6 +31,7 @@
 - [x] Добавить `configs/tech_stack.yaml`
 - [x] Добавить `scripts/model_bakeoff.py`
 - [x] Добавить optional vLLM backend для bake-off
+- [x] Добавить ночной tmux pipeline `scripts/nightly_ueba_pipeline.sh`
 - [x] Smoke-test `--mock`
 - [ ] Zero-shot bake-off: Qwen3-4B, Qwen2.5-3B, SmolLM3-3B, Phi-4-mini
 - [ ] Few-shot bake-off

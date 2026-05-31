@@ -187,6 +187,44 @@ python scripts/model_bakeoff.py \
   --limit 100
 ```
 
+## Ночной pipeline в tmux
+
+Полный ночной запуск на Linux GPU:
+
+```bash
+tmux new -s nirs
+scripts/nightly_ueba_pipeline.sh \
+  --data-dir data/cert-r4.2 \
+  --setup-env \
+  --backend vllm \
+  --limit 200
+```
+
+Отсоединиться от `tmux`: `Ctrl+B`, затем `D`.
+
+Вернуться утром:
+
+```bash
+tmux attach -t nirs
+```
+
+Если нужен быстрый тест без CERT и без скачивания моделей:
+
+```bash
+scripts/nightly_ueba_pipeline.sh \
+  --synthetic-smoke \
+  --backend transformers \
+  --skip-baselines \
+  --skip-bakeoff
+```
+
+Итоги ночного запуска будут в:
+
+```text
+outputs/nightly/nightly_ueba_<timestamp>/SUMMARY.md
+outputs/nightly/nightly_ueba_<timestamp>.tar.gz
+```
+
 ## Colab Notebook
 
 Для стабильного запуска в Colab используется:

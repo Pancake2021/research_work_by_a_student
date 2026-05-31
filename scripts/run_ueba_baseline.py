@@ -9,6 +9,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from collections import Counter
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -35,7 +36,11 @@ def main():
     x_train, y_train = featurize(train)
     x_test, _ = featurize(test)
 
-    if args.model == "rf":
+    if len(set(y_train)) < 2:
+        from sklearn.dummy import DummyClassifier
+
+        clf = DummyClassifier(strategy="most_frequent")
+    elif args.model == "rf":
         from sklearn.ensemble import RandomForestClassifier
 
         clf = RandomForestClassifier(n_estimators=200, random_state=42, class_weight="balanced")
@@ -50,7 +55,15 @@ def main():
         for label in predictions
     ]
     metrics = evaluate_ueba_predictions(test, responses)
-    metrics.update({"method": args.model, "n_train": len(train), "n_test": len(test)})
+    metrics.update(
+        {
+            "method": args.model,
+            "n_train": len(train),
+            "n_test": len(test),
+            "train_label_distribution": dict(Counter(y_train)),
+            "estimator": clf.__class__.__name__,
+        }
+    )
     (output_dir / "metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(metrics, ensure_ascii=False, indent=2))
 
