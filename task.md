@@ -1,51 +1,66 @@
-# Диплом: Оптимизация RL-обучения LLM для задач поведенческого анализа
+# НИРС: Small LLM + GRPO для UEBA
 
-## Фаза 0 — Окружение
-- [ ] Создать `requirements.txt`
-- [ ] Создать `setup.py` / `pyproject.toml`
-- [ ] Создать `.env.example`
-- [ ] Создать `README.md`
+## Фаза 0 — База знаний и постановка
+- [ ] Создать Obsidian-файлы `00_STATUS_LOG.md` ... `06_PRESENTATION_OUTLINE.md`
+- [ ] Зафиксировать цель, объект, предмет, гипотезы в `01_RESEARCH_SPEC.md`
+- [ ] Зафиксировать модельную стратегию bake-off first
+- [x] Зафиксировать tech stack: vLLM, Unsloth, TRL, PEFT, bitsandbytes, Transformers
 
-## Фаза 1 — Данные
-- [ ] `src/data/dataset_loader.py` — загрузка датасета IEMOCAP/CMU-MOSI
-- [ ] `src/data/preprocessor.py` — препроцессинг и форматирование
-- [ ] `src/data/data_utils.py` — вспомогательные функции
+## Фаза 1 — CERT / UEBA данные
+- [x] Добавить `src/data/scenario_builder.py`
+- [x] Добавить `src/data/cert_loader.py`
+- [x] Добавить `scripts/prepare_cert_dataset.py`
+- [ ] Скачать/подключить CERT Insider Threat Dataset R4.2
+- [ ] Подготовить реальные `train/dev/test.jsonl`
+- [ ] Проверить split by user и отсутствие leakage
 
-## Фаза 2 — Baseline модель
-- [ ] `src/models/model_loader.py` — загрузка Qwen-2.5-1.5B через Unsloth
-- [ ] `src/models/baseline_eval.py` — замер baseline метрик
+## Фаза 2 — Метрики и rewards
+- [x] Добавить `src/evaluation/ueba_metrics.py`
+- [x] Добавить `src/rewards/reward_ueba.py`
+- [x] Обновить preprocessor под `normal/suspicious/malicious`
+- [ ] Проверить evidence scoring на реальных примерах
 
-## Фаза 3 — Reward Functions
-- [ ] `src/rewards/reward_accuracy.py` — RF1: простая accuracy
-- [ ] `src/rewards/reward_reasoning.py` — RF2: с бонусом за рассуждение
-- [ ] `src/rewards/reward_binary.py` — RF3: бинарная со штрафом (DeepSeek-R1 стиль)
-- [ ] `src/rewards/__init__.py`
+## Фаза 3 — Baseline
+- [x] Добавить `scripts/run_ueba_baseline.py`
+- [ ] Запустить Logistic Regression baseline
+- [ ] Запустить RandomForest baseline
+- [ ] Сохранить результаты в `04_EXPERIMENT_LOG.md`
 
-## Фаза 4 — Обучение GRPO
-- [ ] `src/training/grpo_trainer.py`
-- [ ] `configs/grpo_config.yaml`
+## Фаза 4 — Model bake-off
+- [x] Добавить `configs/model_registry.yaml`
+- [x] Добавить `configs/tech_stack.yaml`
+- [x] Добавить `scripts/model_bakeoff.py`
+- [x] Добавить optional vLLM backend для bake-off
+- [x] Smoke-test `--mock`
+- [ ] Zero-shot bake-off: Qwen3-4B, Qwen2.5-3B, SmolLM3-3B, Phi-4-mini
+- [ ] Few-shot bake-off
+- [ ] Зафиксировать выбор main model в `03_MODEL_BAKEOFF.md`
 
-## Фаза 5 — Обучение PPO
-- [ ] `src/training/ppo_trainer.py`
-- [ ] `configs/ppo_config.yaml`
+## Фаза 5 — SFT / GRPO
+- [ ] Адаптировать SFT script под UEBA JSONL
+- [ ] Адаптировать GRPO trainer под актуальный TRL API
+- [ ] Запустить GRPO RF1 `ueba_accuracy`
+- [ ] Запустить GRPO RF2 `ueba_format`
+- [ ] Запустить GRPO RF3 `ueba_evidence`
+- [ ] Сравнить rewards по F1, recall malicious, format/evidence metrics
 
-## Фаза 6 — Модификации GRPO
-- [ ] `src/training/dapo_trainer.py` — энтропийный бонус
-- [ ] `src/rewards/reward_entropy.py` — entropy-aware reward
-- [ ] `src/rewards/reward_lambda_grpo.py` — λ-GRPO взвешенная награда
+## Фаза 6 — Анализ результатов
+- [ ] Построить итоговую таблицу метрик
+- [ ] Построить графики F1 / recall / FPR / valid format / evidence hit
+- [ ] Провести анализ false positive / false negative
+- [ ] Выбрать финальные результаты для отчета
 
-## Фаза 7 — Оценка и анализ
-- [ ] `src/evaluation/evaluator.py` — финальные метрики
-- [ ] `src/evaluation/error_analysis.py` — анализ ошибок
-- [ ] `src/visualization/plots.py` — графики для диплома
+## Фаза 7 — Отчет
+- [ ] Сформировать `05_REPORT_OUTLINE.md`
+- [ ] Написать введение, цель, объект, предмет
+- [ ] Написать раздел UEBA и insider threat detection
+- [ ] Написать раздел small LLM / SFT / GRPO / reward design
+- [ ] Написать раздел датасета и экспериментов
+- [ ] Вставить таблицы, графики и анализ ошибок
+- [ ] Подготовить финальный DOCX в стиле примеров НИРС
 
-## Фаза 8 — Сохранение модели
-- [ ] `src/utils/model_saver.py`
-- [ ] `notebooks/01_baseline.ipynb` — Colab-notebook для baseline
-- [ ] `notebooks/02_grpo_training.ipynb`
-- [ ] `notebooks/03_ppo_training.ipynb`
-- [ ] `notebooks/04_evaluation.ipynb`
-
-## Финал
-- [ ] `scripts/run_full_pipeline.py` — единый скрипт запуска
-- [ ] `scripts/run_evaluation.py`
+## Фаза 8 — Презентация
+- [ ] Сформировать `06_PRESENTATION_OUTLINE.md`
+- [ ] Подготовить 8-10 слайдов
+- [ ] Добавить отдельный слайд “Почему эта модель?”
+- [ ] Добавить финальные графики и краткие выводы

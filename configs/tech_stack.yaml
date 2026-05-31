@@ -1,0 +1,84 @@
+project_stack:
+  research_task:
+    - UEBA / insider threat detection
+    - CERT Insider Threat Dataset R4.2
+    - Small LLM model bake-off
+    - SFT / GRPO reward-function experiments
+
+  inference_backends:
+    transformers:
+      role: default_compatible_backend
+      use_for:
+        - smoke tests
+        - local debugging
+        - models with special HF code
+      notes: "Most compatible fallback; slower than vLLM."
+    vllm:
+      role: high_throughput_inference_backend
+      use_for:
+        - zero-shot model bake-off
+        - few-shot model bake-off
+        - fast evaluation after training
+      constraints:
+        - "Best on Linux + CUDA."
+        - "Quantization support depends on model and installed vLLM version."
+        - "If vLLM fails, rerun with transformers backend."
+
+  training_stack:
+    unsloth:
+      role: efficient_finetuning_on_small_gpu
+      use_for:
+        - 4-bit QLoRA model loading
+        - memory-efficient SFT
+        - memory-efficient GRPO when supported
+      reason: "Primary path for RTX 4060 8GB experiments."
+    trl:
+      role: rl_and_alignment_trainers
+      use_for:
+        - SFTTrainer
+        - GRPOTrainer
+        - reward function integration
+      reason: "Main research library for GRPO/RLHF-style experiments."
+    peft:
+      role: lora_adapters
+      use_for:
+        - LoRA / QLoRA adapters
+        - saving lightweight checkpoints
+    bitsandbytes:
+      role: quantization
+      use_for:
+        - 4-bit NF4 loading
+        - 8GB GPU compatibility
+    accelerate:
+      role: device_mapping_and_training_runtime
+      use_for:
+        - device_map auto
+        - mixed precision
+
+  experiment_tracking:
+    wandb:
+      role: optional_remote_tracking
+      use_for:
+        - train metrics
+        - reward curves
+        - model comparison
+    local_outputs:
+      role: required_reproducibility_layer
+      use_for:
+        - config snapshots
+        - metrics.json
+        - predictions.jsonl
+        - samples.md
+
+  data_and_metrics:
+    pandas: "CERT CSV loading and aggregation"
+    scikit_learn: "classical UEBA baselines and metric checks"
+    datasets: "HF Dataset interop for SFT/GRPO"
+    matplotlib_plotly: "report and presentation figures"
+
+decision:
+  default_inference_backend: transformers
+  preferred_bakeoff_backend: vllm
+  preferred_training_path: "Unsloth + TRL + PEFT + bitsandbytes"
+  fallback_training_path: "Transformers + TRL + PEFT + bitsandbytes"
+  hardware_target: "RTX 4060 8GB"

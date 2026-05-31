@@ -20,7 +20,7 @@ env/
 # ML outputs (большие файлы — не в git)
 outputs/
 checkpoints/
-data/
+/data/
 wandb/
 *.safetensors
 *.bin

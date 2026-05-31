@@ -14,6 +14,7 @@ from src.rewards.reward_reasoning  import reward_with_reasoning
 from src.rewards.reward_binary     import reward_binary
 from src.rewards.reward_entropy    import reward_with_entropy_bonus
 from src.rewards.reward_lambda_grpo import reward_length_weighted
+from src.rewards.reward_ueba import reward_ueba_accuracy, reward_ueba_evidence, reward_ueba_format
 
 REWARD_REGISTRY = {
     "accuracy":    reward_accuracy,
@@ -21,6 +22,9 @@ REWARD_REGISTRY = {
     "binary":      reward_binary,
     "entropy":     reward_with_entropy_bonus,
     "lambda_grpo": reward_length_weighted,
+    "ueba_accuracy": reward_ueba_accuracy,
+    "ueba_format": reward_ueba_format,
+    "ueba_evidence": reward_ueba_evidence,
 }
 
 
@@ -40,6 +44,9 @@ __all__ = [
     "reward_binary",
     "reward_with_entropy_bonus",
     "reward_length_weighted",
+    "reward_ueba_accuracy",
+    "reward_ueba_format",
+    "reward_ueba_evidence",
     "REWARD_REGISTRY",
     "get_reward_fn",
 ]

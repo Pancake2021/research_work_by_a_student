@@ -1,0 +1,15 @@
+# Optional CUDA/Linux stack for real model bake-off and training.
+# Keep requirements.txt as the portable baseline; install this file only on a
+# machine where CUDA PyTorch, bitsandbytes, vLLM, and Unsloth are expected to work.
+
+-r requirements.txt
+
+# High-throughput inference for zero/few-shot bake-off and evaluation.
+vllm>=0.8.0
+
+# Training path for RTX 4060 8GB experiments.
+unsloth>=2025.0.0
+trl>=0.17.0
+peft>=0.15.0
+bitsandbytes>=0.45.0
+accelerate>=1.4.0

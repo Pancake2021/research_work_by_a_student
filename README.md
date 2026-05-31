@@ -1,142 +1,96 @@
-# Оптимизация RL-обучения LLM для задач поведенческого анализа
+# Small LLM + GRPO для UEBA / Insider Threat Detection
 
-**Autor:** Теридакс Макута  
-**Period:** Март — Май 2026  
-**Topic:** Fine-tuning open-source LLM (1.5B–3B params) через Reinforcement Learning на задаче классификации поведенческих паттернов в тексте. Сравнение PPO vs GRPO vs модификации (DAPO, λ-GRPO).
+НИРС: исследование применимости малых языковых моделей и reward-based RL-дообучения для анализа поведения пользователей в задачах информационной безопасности.
 
----
+Фокус работы: UEBA-сценарии на основе CERT Insider Threat Dataset R4.2. Модель получает текстовое описание активности пользователя и должна вернуть SOC-полезный ответ:
 
-## Архитектура пайплайна
-
-```
-Данные → Препроцессинг → Base LLM (Qwen-2.5-1.5B) → RL-обучение → Reward Function → Оценка
+```text
+Риск: <normal|suspicious|malicious>
+Признаки: <2-4 признака риска>
+Обоснование: <краткое объяснение>
 ```
 
----
+Qwen2.5 не заявляется как SOTA. Он используется как стабильный baseline. Основная стратегия выбора модели — предварительный model bake-off актуальных small LLM на одном dev-set.
+
+## Исследовательская схема
+
+1. Подготовить CERT CSV в UEBA-сценарии.
+2. Разбить данные по пользователям, чтобы исключить leakage.
+3. Запустить classical ML baseline по агрегированным признакам.
+4. Запустить zero/few-shot bake-off small LLM.
+5. Выбрать main model по F1, recall malicious, valid format rate, evidence hit rate и VRAM.
+6. Провести SFT/GRPO эксперименты с reward-функциями.
+7. Сравнить качество, объяснимость, формат и ошибки.
 
 ## Структура проекта
 
-```
+```text
 research_work_by_a_student/
-├── configs/                    # YAML конфиги обучения
+├── configs/
 │   ├── grpo_config.yaml
-│   └── ppo_config.yaml
-├── notebooks/                  # Jupyter/Colab ноутбуки
-│   ├── 01_baseline.ipynb
-│   ├── 02_grpo_training.ipynb
-│   ├── 03_ppo_training.ipynb
-│   ├── 04_evaluation.ipynb
+│   ├── model_registry.yaml
+│   ├── ppo_config.yaml
+│   └── tech_stack.yaml
+├── notebooks/
 │   └── colab_diploma_experiments.ipynb
-├── scripts/                    # Скрипты запуска
+├── scripts/
+│   ├── model_bakeoff.py
+│   ├── prepare_cert_dataset.py
 │   ├── run_full_pipeline.py
-│   └── run_evaluation.py
+│   ├── run_ueba_baseline.py
+│   ├── setup_uv_env.sh
+│   └── macos_nightly_runner.sh
 ├── src/
-│   ├── data/                   # Данные и препроцессинг
-│   │   ├── dataset_loader.py
-│   │   ├── preprocessor.py
-│   │   └── data_utils.py
-│   ├── models/                 # Загрузка и eval базовой модели
-│   │   ├── model_loader.py
-│   │   └── baseline_eval.py
-│   ├── rewards/                # Reward functions (RF1, RF2, RF3)
-│   │   ├── __init__.py
-│   │   ├── reward_accuracy.py
-│   │   ├── reward_reasoning.py
-│   │   ├── reward_binary.py
-│   │   ├── reward_entropy.py
-│   │   └── reward_lambda_grpo.py
-│   ├── training/               # Тренеры PPO / GRPO / DAPO
-│   │   ├── grpo_trainer.py
-│   │   ├── ppo_trainer.py
-│   │   └── dapo_trainer.py
-│   ├── evaluation/             # Метрики и анализ ошибок
-│   │   ├── evaluator.py
-│   │   └── error_analysis.py
-│   └── visualization/          # Графики для диплома
-│       └── plots.py
-├── .env.example
+│   ├── data/
+│   ├── evaluation/
+│   ├── models/
+│   ├── rewards/
+│   ├── training/
+│   └── visualization/
+├── pyproject.toml
 ├── requirements.txt
+├── requirements-gpu.txt
 └── README.md
 ```
 
----
+## Модели для bake-off
 
-## Быстрый старт (Colab / Kaggle)
+Список кандидатов хранится в `configs/model_registry.yaml`.
 
-### 1. Установка зависимостей
+| Роль | Модель |
+|---|---|
+| main candidate | `Qwen/Qwen3-4B-Instruct-2507` |
+| practical baseline | `Qwen/Qwen2.5-3B-Instruct` |
+| small fallback | `Qwen/Qwen2.5-1.5B-Instruct` |
+| alternative open | `HuggingFaceTB/SmolLM3-3B` |
+| alternative strong | `microsoft/Phi-4-mini-instruct` |
+| optional | `google/gemma-4-E4B-it` |
 
-```bash
-pip install unsloth transformers trl datasets accelerate peft
-pip install wandb bitsandbytes sentencepiece evaluate scikit-learn
-pip install plotly kaleido
-```
+## Стек проекта
 
-### 2. Переменные окружения
+Машинно-читаемая фиксация стека хранится в `configs/tech_stack.yaml`.
 
-```bash
-cp .env.example .env
-# Заполнить HF_TOKEN и WANDB_API_KEY
-```
+| Часть | Основной инструмент | Роль |
+|---|---|---|
+| Dataset pipeline | `pandas`, `datasets` | CERT CSV, JSONL splits, HF Dataset interop |
+| Classical baseline | `scikit-learn` | Logistic Regression / RandomForest |
+| Compatible inference | `transformers` | fallback для любого HF model card |
+| Fast inference | `vLLM` | быстрый zero/few-shot bake-off и evaluation |
+| Efficient finetuning | `Unsloth` | 4-bit QLoRA/SFT/GRPO на 8GB GPU |
+| RL/SFT trainers | `TRL` | `SFTTrainer`, `GRPOTrainer`, reward integration |
+| Adapters | `PEFT` | LoRA/QLoRA checkpoints |
+| Quantization | `bitsandbytes` | NF4/4-bit режим для RTX 4060 8GB |
+| Tracking | `wandb` + local outputs | curves, configs, metrics, predictions |
 
-### 3. Проверка GPU
+Default для bake-off — `transformers`, потому что он максимально совместим. Для реальных массовых прогонов на CUDA/Linux использовать `--backend vllm`. Для SFT/GRPO основной путь — `Unsloth + TRL + PEFT + bitsandbytes`; fallback — `Transformers + TRL + PEFT + bitsandbytes`.
 
-```python
-import torch
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0))
-```
+## Окружение
 
-### 4. Запуск baseline
-
-```bash
-python scripts/run_full_pipeline.py --mode baseline
-```
-
-### 5. Обучение GRPO
-
-```bash
-python scripts/run_full_pipeline.py --mode grpo --reward reasoning
-```
-
-### 6. Обучение PPO
-
-```bash
-python scripts/run_full_pipeline.py --mode ppo
-```
-
-### 7. Финальная оценка
-
-```bash
-python scripts/run_evaluation.py --checkpoint ./grpo_output
-```
-
----
-
-## Запуск Через Единый Colab Notebook
-
-Для стабильного запуска в Colab используй ноутбук:
-
-- `notebooks/colab_diploma_experiments.ipynb`
-
-Он включает:
-- устойчивую установку зависимостей (с fix `blinker`)
-- автоматическое обновление ветки `develop`
-- запуск EXP-01..EXP-07 по порядку
-- полное логирование, сохранение данных и построение графиков
-
----
-
-## Кастомное Окружение Через uv
-
-В проект добавлен `pyproject.toml` с dependency-группами под разные сценарии запуска.
-
-Быстрая настройка:
+Быстрая настройка через `uv`:
 
 ```bash
 scripts/setup_uv_env.sh
 ```
-
-Это создаст `.venv` и установит группу `local` по умолчанию.
 
 Дополнительно:
 
@@ -146,15 +100,104 @@ scripts/setup_uv_env.sh local cuda
 scripts/setup_uv_env.sh --help
 ```
 
-Примечание:
-- группа `cuda` нужна для Linux/CUDA-окружений (Colab GPU), для macOS обычно не подходит.
+Примечание: группа `cuda` нужна для Linux/CUDA-окружений, для macOS обычно не подходит.
 
----
+Portable pip setup:
 
+```bash
+pip install -r requirements.txt
+```
 
-## Ночной Фоновый Запуск На macOS
+CUDA/Linux setup:
 
-Для долгого прогона в фоне используй:
+```bash
+pip install -r requirements-gpu.txt
+```
+
+## Подготовка данных
+
+Smoke dataset без CERT:
+
+```bash
+python scripts/prepare_cert_dataset.py \
+  --synthetic-smoke \
+  --output-dir outputs/cert_ueba_smoke
+```
+
+Реальный CERT dataset:
+
+```bash
+python scripts/prepare_cert_dataset.py \
+  --data-dir /path/to/cert/r4.2 \
+  --labels /path/to/labels.csv \
+  --output-dir outputs/cert_ueba
+```
+
+Ожидаемые CERT файлы: `logon.csv`, `device.csv`, `file.csv`, `email.csv`, `http.csv`.
+
+## Baseline и bake-off
+
+Classical ML baseline:
+
+```bash
+python scripts/run_ueba_baseline.py \
+  --train-jsonl outputs/cert_ueba/train.jsonl \
+  --test-jsonl outputs/cert_ueba/test.jsonl \
+  --model logreg
+```
+
+Mock bake-off для проверки пайплайна без скачивания моделей:
+
+```bash
+python scripts/model_bakeoff.py \
+  --dataset-jsonl outputs/cert_ueba_smoke/dev.jsonl \
+  --registry configs/model_registry.yaml \
+  --mock
+```
+
+Реальный zero-shot bake-off:
+
+```bash
+python scripts/model_bakeoff.py \
+  --dataset-jsonl outputs/cert_ueba/dev.jsonl \
+  --registry configs/model_registry.yaml \
+  --models qwen3_4b_instruct_2507 qwen2_5_3b_instruct smollm3_3b phi4_mini_instruct \
+  --limit 100
+```
+
+Быстрый bake-off через vLLM:
+
+```bash
+python scripts/model_bakeoff.py \
+  --dataset-jsonl outputs/cert_ueba/dev.jsonl \
+  --registry configs/model_registry.yaml \
+  --backend vllm \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.85 \
+  --models qwen3_4b_instruct_2507 qwen2_5_3b_instruct smollm3_3b phi4_mini_instruct \
+  --limit 100
+```
+
+Few-shot bake-off:
+
+```bash
+python scripts/model_bakeoff.py \
+  --dataset-jsonl outputs/cert_ueba/dev.jsonl \
+  --few-shot-k 3 \
+  --limit 100
+```
+
+## Colab Notebook
+
+Для стабильного запуска в Colab используется:
+
+- `notebooks/colab_diploma_experiments.ipynb`
+
+Он включает установку зависимостей, обновление ветки `develop`, запуск EXP-01..EXP-07, логирование, сохранение данных и построение графиков.
+
+## Ночной фоновый запуск на macOS
+
+Для долгого прогона в фоне:
 
 ```bash
 scripts/macos_nightly_runner.sh start baseline
@@ -167,53 +210,65 @@ scripts/macos_nightly_runner.sh status
 scripts/macos_nightly_runner.sh stop
 ```
 
-Важно:
-- Скрипт использует `caffeinate -is`, поэтому при погашенном экране процесс продолжает работать.
-- При закрытии крышки Mac обычно уходит в сон, и вычисления останавливаются (кроме clamshell-режима: питание + внешний дисплей + внешняя клавиатура/мышь).
-- Полный цикл EXP-01..EXP-07 на M1 MacBook Pro в 7 часов обычно не укладывается и может падать из-за CUDA-ориентированных зависимостей. Для надёжности используй Colab notebook.
+Важно: MacBook при закрытии крышки обычно уходит в сон. Для надежных CUDA-прогонов использовать Linux/Colab.
 
----
+## Метрики
 
-## Reward Functions
+Основные метрики:
 
-| RF | Описание | Диапазон | Когда использовать |
-|----|----------|----------|-------------------|
-| RF1 `accuracy` | Бинарная: правильно/нет | `{0.0, 1.0}` | Простой baseline |
-| RF2 `reasoning` | RF1 + бонус за наличие раздела "Анализ:" | `{0.0, 1.2}` | Основной эксперимент |
-| RF3 `binary` | 0 / -0.5 / -1.0 (штрафы за отказ и ошибку) | `{-1.0, 0.0}` | DeepSeek-R1 стиль |
-| RF4 `entropy` | RF1 + энтропийный бонус токенов | `[0.0, 1.1]` | λ-GRPO / DAPO |
-| RF5 `lambda_grpo` | RF1 × нормированная длина ответа | `[0.0, 1.0]` | λ-GRPO |
+- `accuracy`
+- `macro_f1`
+- `weighted_f1`
+- `recall_malicious`
+- `false_positive_rate`
+- `valid_format_rate`
+- `evidence_hit_rate`
+- `avg_response_length`
+- `train_time_minutes`
+- `peak_vram_gb`
 
----
+Критерий выбора main model: не только F1, но и способность стабильно выдавать корректный SOC-формат с признаками риска.
 
-## Методы обучения
+## Reward-функции
 
-| Метод | Описание | GPU RAM (4-bit LoRA) |
-|-------|----------|----------------------|
-| Baseline | Нет RL, только инференс | ~4 GB |
-| GRPO | Group Relative Policy Optimization | ~8–10 GB |
-| PPO | Proximal Policy Optimization + critic | ~14–16 GB |
-| DAPO | GRPO + entropy bonus | ~8–10 GB |
-| λ-GRPO | GRPO + length-weighted reward | ~8–10 GB |
+Legacy rewards:
 
----
+| RF | Описание | Диапазон |
+|----|----------|----------|
+| `accuracy` | Бинарная: правильно/нет | `{0.0, 1.0}` |
+| `reasoning` | Accuracy + бонус за раздел "Анализ:" | `{0.0, 1.2}` |
+| `binary` | штрафы за отказ и ошибку | `{-1.0, -0.5, 0.0}` |
+| `entropy` | accuracy + энтропийный бонус | `[0.0, 1.1]` |
+| `lambda_grpo` | accuracy × нормированная длина | `[0.0, 1.0}` |
 
-## Таблица результатов (заполнять в процессе)
+UEBA rewards:
 
-| Метод | Reward Fn | F1-score | Время (ч) | GPU RAM | Стабильность |
-|-------|-----------|----------|-----------|---------|--------------|
-| Baseline | — | — | — | — | — |
-| GRPO | RF2 | — | — | — | — |
-| PPO | RF2 | — | — | — | — |
-| DAPO | RF4 | — | — | — | — |
-| λ-GRPO | RF5 | — | — | — | — |
+- `ueba_accuracy` — награда только за правильный risk label;
+- `ueba_format` — risk label + наличие обязательных полей;
+- `ueba_evidence` — risk label + формат + совпадение evidence + штраф за неподтвержденные признаки.
 
----
+GRPO остается центральным RL-методом. PPO не является обязательным, так как хуже подходит под RTX 4060 8GB и требует более сложной value/reward-model схемы.
 
-## Литература
+## Outputs
 
-1. DeepSeek-R1: https://arxiv.org/abs/2501.12948
-2. TRL Docs: https://huggingface.co/docs/trl
-3. Unsloth GRPO: https://unsloth.ai/blog/grpo
-4. PPO (Schulman et al., 2017): https://arxiv.org/abs/1707.06347
-5. DAPO: https://arxiv.org/abs/2503.14476
+Каждый запуск пишет результаты в отдельный каталог:
+
+```text
+outputs/<run_id>/
+├── run_config.json
+├── model_registry.yaml
+├── summary.json
+├── summary.md
+└── <model_key>/
+    ├── metrics.json
+    ├── predictions.jsonl
+    └── samples.md
+```
+
+## Статус и планы НИРС
+
+Все решения и журналы НИРС ведутся в Obsidian:
+
+```text
+/Users/glebpankeev/Documents/Obsidian Vault/SSAU/НИРС
+```

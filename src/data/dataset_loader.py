@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import random
@@ -25,8 +26,9 @@ def load_behavior_dataset(
     seed: int = 42,
     save_path: str | None = None,
     local_json_path: str | None = None,
+    local_path: str | None = None,
 ):
-    """Return DatasetDict with mandatory `text` and `label` columns.
+    """Return DatasetDict/list dict with mandatory `text` and `label` columns.
 
     Supported dataset_name values:
     - `synthetic`: generated local binary sentiment data
@@ -42,26 +44,20 @@ def load_behavior_dataset(
         train_rows = _generate_synthetic_rows(target_train, rng)
         test_rows = _generate_synthetic_rows(target_test, rng)
     elif dataset_name == "local_json":
-        resolved_path = local_json_path or os.getenv("DATASET_JSON_PATH")
+        resolved_path = local_json_path or local_path or os.getenv("DATASET_JSON_PATH")
         if not resolved_path:
-            raise ValueError(
-                "For dataset_name='local_json' set --dataset-path or DATASET_JSON_PATH"
-            )
-        rows = _load_local_rows(resolved_path)
-        rows = _normalize_rows(rows)
+            raise ValueError("For dataset_name='local_json' set --dataset-path or DATASET_JSON_PATH")
+        rows = _normalize_rows(_load_local_rows(resolved_path))
         if len(rows) < target_train + target_test:
-            raise ValueError(
-                f"Not enough rows in {resolved_path}: need at least {target_train + target_test}"
-            )
+            raise ValueError(f"Not enough rows in {resolved_path}: need at least {target_train + target_test}")
         rng.shuffle(rows)
         train_rows = rows[:target_train]
-        test_rows = rows[target_train: target_train + target_test]
+        test_rows = rows[target_train : target_train + target_test]
     else:
-        rows = _load_remote_or_fallback(dataset_name, target_train + target_test, seed)
-        rows = _normalize_rows(rows)
+        rows = _normalize_rows(_load_remote_or_fallback(dataset_name, target_train + target_test, seed))
         rng.shuffle(rows)
         train_rows = rows[:target_train]
-        test_rows = rows[target_train: target_train + target_test]
+        test_rows = rows[target_train : target_train + target_test]
 
     if HFDataset is not None and HFDatasetDict is not None:
         train_ds = HFDataset.from_list(train_rows)
@@ -70,19 +66,12 @@ def load_behavior_dataset(
         train_len = len(train_ds)
         test_len = len(test_ds)
     else:
-        logger.warning(
-            "Package 'datasets' is unavailable; using plain python lists for train/test."
-        )
+        logger.warning("Package 'datasets' is unavailable; using plain python lists for train/test.")
         dataset = {"train": train_rows, "test": test_rows}
         train_len = len(train_rows)
         test_len = len(test_rows)
 
-    logger.info(
-        "Dataset ready: %s | train=%s test=%s",
-        dataset_name,
-        train_len,
-        test_len,
-    )
+    logger.info("Dataset ready: %s | train=%s test=%s", dataset_name, train_len, test_len)
 
     if save_path:
         save_dir = Path(save_path)
@@ -103,20 +92,12 @@ def _load_remote_or_fallback(dataset_name: str, min_rows: int, seed: int):
         rng = random.Random(seed)
         return _generate_synthetic_rows(min_rows * 2, rng)
 
-    # Conservative aliases; some may be unavailable depending on environment.
     aliases = {
-        "iemocap": [
-            ("daily_dialog", None),
-            ("emotion", None),
-        ],
-        "cmu_mosi": [
-            ("tweet_eval", "sentiment"),
-            ("imdb", None),
-        ],
+        "iemocap": [("daily_dialog", None), ("emotion", None)],
+        "cmu_mosi": [("tweet_eval", "sentiment"), ("imdb", None)],
     }
 
-    attempts = aliases.get(dataset_name, [])
-    for ds_name, config in attempts:
+    for ds_name, config in aliases.get(dataset_name, []):
         try:
             ds = load_dataset(ds_name, config, split="train") if config else load_dataset(ds_name, split="train")
             rows = []
@@ -154,8 +135,6 @@ def _load_local_rows(path: str):
             return list(data)
 
     if suffix == ".csv":
-        import csv
-
         with path_obj.open("r", encoding="utf-8") as f:
             return list(csv.DictReader(f))
 
@@ -177,7 +156,6 @@ def _normalize_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, str]]:
 def _map_label(raw: Any) -> str | None:
     if raw is None:
         return None
-
     if isinstance(raw, (int, float)):
         return "positive" if float(raw) > 0 else "negative"
 
@@ -221,7 +199,7 @@ def _generate_synthetic_rows(n: int, rng: random.Random) -> list[dict[str, str]]
     return rows
 
 
-def _save_jsonl(rows: list[dict[str, Any]], path: Path) -> None:
+def _save_jsonl(rows, path: Path) -> None:
     with path.open("w", encoding="utf-8") as f:
         for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            f.write(json.dumps(dict(row), ensure_ascii=False) + "\n")

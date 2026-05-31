@@ -1,0 +1,86 @@
+models:
+  qwen3_4b_instruct_2507:
+    role: main_candidate
+    hf_id: Qwen/Qwen3-4B-Instruct-2507
+    params: 4.0B
+    license: apache-2.0
+    context_length: 262144
+    load_in_4bit: true
+    trust_remote_code: false
+    task: text-generation
+    priority: 1
+    notes: >
+      First candidate for UEBA bake-off. Fresh Qwen3 small model with strong
+      instruction following and reasoning; not guaranteed to fit GRPO on 8GB.
+
+  qwen2_5_3b_instruct:
+    role: practical_baseline
+    hf_id: Qwen/Qwen2.5-3B-Instruct
+    params: 3.09B
+    license: qwen-research
+    context_length: 32768
+    load_in_4bit: true
+    trust_remote_code: false
+    task: text-generation
+    priority: 2
+    notes: >
+      Stable baseline only. Do not claim SOTA; use to show why the main model
+      was selected by bake-off.
+
+  qwen2_5_1_5b_instruct:
+    role: small_fallback
+    hf_id: Qwen/Qwen2.5-1.5B-Instruct
+    params: 1.54B
+    license: apache-2.0
+    context_length: 32768
+    load_in_4bit: true
+    trust_remote_code: false
+    task: text-generation
+    priority: 3
+    notes: >
+      Lightweight fallback for GRPO on RTX 4060 8GB when 3B-4B models do not
+      fit with generation groups.
+
+  smollm3_3b:
+    role: alternative_open
+    hf_id: HuggingFaceTB/SmolLM3-3B
+    params: 3B
+    license: apache-2.0
+    context_length: 65536
+    load_in_4bit: true
+    trust_remote_code: false
+    task: text-generation
+    priority: 4
+    chat_template_kwargs:
+      enable_thinking: false
+    notes: >
+      Fully open research-friendly 3B baseline with open training details.
+
+  phi4_mini_instruct:
+    role: alternative_strong
+    hf_id: microsoft/Phi-4-mini-instruct
+    params: 3.8B
+    license: mit
+    context_length: 128000
+    load_in_4bit: true
+    trust_remote_code: true
+    task: text-generation
+    priority: 5
+    notes: >
+      Strong 3.8B baseline. Requires trust_remote_code; compatibility with
+      Unsloth/TRL must be verified before SFT/GRPO.
+
+  gemma4_e4b:
+    role: optional
+    hf_id: google/gemma-4-E4B-it
+    params: 4.5B_effective
+    license: apache-2.0
+    context_length: 128000
+    load_in_4bit: true
+    trust_remote_code: false
+    task: image-text-to-text
+    priority: 6
+    notes: >
+      Fresh and strong instruction-tuned small model, but Gemma 4 is multimodal
+      and may need AutoProcessor-specific loading. Use inference-only or
+      SFT-only after explicit compatibility check.
