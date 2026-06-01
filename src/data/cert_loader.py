@@ -7,9 +7,10 @@ cert_loader.py
 from __future__ import annotations
 
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from src.data.scenario_builder import ScenarioRecord, build_scenario_record
 
@@ -23,8 +24,21 @@ CERT_EVENT_FILES = {
 }
 
 
-def load_cert_events(data_dir: str | Path, max_rows_per_file: int | None = None) -> list[dict[str, Any]]:
+def load_cert_events(
+    data_dir: str | Path,
+    max_rows_per_file: int | None = None,
+    csv_chunksize: int = 100_000,
+) -> list[dict[str, Any]]:
     """Загружает доступные CERT CSV-файлы в общий список событий."""
+    return list(iter_cert_events(data_dir, max_rows_per_file=max_rows_per_file, csv_chunksize=csv_chunksize))
+
+
+def iter_cert_events(
+    data_dir: str | Path,
+    max_rows_per_file: int | None = None,
+    csv_chunksize: int = 100_000,
+) -> Iterator[dict[str, Any]]:
+    """Стримит CERT CSV-файлы чанками, чтобы не держать весь датасет в pandas DataFrame."""
     import pandas as pd
 
     root = Path(data_dir)
@@ -43,16 +57,22 @@ def load_cert_events(data_dir: str | Path, max_rows_per_file: int | None = None)
             "or keep using the current path after this recursive lookup fix."
         )
 
-    events: list[dict[str, Any]] = []
     for event_type, path in csv_paths.items():
-        frame = pd.read_csv(path, nrows=max_rows_per_file)
-        for row in frame.to_dict(orient="records"):
-            row = {str(key).lower(): value for key, value in row.items()}
-            row["event_type"] = event_type
-            row["user_id"] = row.get("user") or row.get("userid") or row.get("user_id") or ""
-            row["timestamp"] = row.get("date") or row.get("time") or row.get("timestamp") or ""
-            events.append(row)
-    return events
+        reader = pd.read_csv(path, nrows=max_rows_per_file, chunksize=csv_chunksize)
+        total_rows = 0
+        for chunk_index, frame in enumerate(reader, start=1):
+            total_rows += len(frame)
+            print(
+                f"[cert_loader] {event_type}: chunk={chunk_index} rows={len(frame)} total={total_rows} file={path}",
+                file=sys.stderr,
+                flush=True,
+            )
+            for row in frame.to_dict(orient="records"):
+                row = {str(key).lower(): value for key, value in row.items()}
+                row["event_type"] = event_type
+                row["user_id"] = row.get("user") or row.get("userid") or row.get("user_id") or ""
+                row["timestamp"] = row.get("date") or row.get("time") or row.get("timestamp") or ""
+                yield row
 
 
 def _find_cert_event_files(root: Path) -> dict[str, Path]:
@@ -74,20 +94,31 @@ def build_cert_scenarios(
     data_dir: str | Path,
     labels_path: str | Path | None = None,
     max_rows_per_file: int | None = None,
+    csv_chunksize: int = 100_000,
+    max_events_per_group: int = 300,
     min_events_per_group: int = 2,
 ) -> list[dict[str, Any]]:
     """Создает prompt/response examples из CERT событий."""
-    events = load_cert_events(data_dir, max_rows_per_file=max_rows_per_file)
     label_map = load_label_map(labels_path) if labels_path else {}
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    total_events = 0
+    kept_events = 0
 
-    for event in events:
+    for event in iter_cert_events(
+        data_dir,
+        max_rows_per_file=max_rows_per_file,
+        csv_chunksize=csv_chunksize,
+    ):
+        total_events += 1
         user_id = str(event.get("user_id") or "")
         timestamp = str(event.get("timestamp") or "")
         date = timestamp[:10] if len(timestamp) >= 10 else "unknown"
         if not user_id:
             continue
-        grouped[(user_id, date)].append(event)
+        key = (user_id, date)
+        if len(grouped[key]) < max_events_per_group:
+            grouped[key].append(event)
+            kept_events += 1
 
     records: list[ScenarioRecord] = []
     for (user_id, date), group_events in grouped.items():
@@ -96,6 +127,13 @@ def build_cert_scenarios(
         label = label_map.get((user_id, date)) or label_map.get((user_id, "*"))
         records.append(build_scenario_record(user_id, date, group_events, risk_label=label))
 
+    print(
+        "[cert_loader] scenarios="
+        f"{len(records)} groups={len(grouped)} events_seen={total_events} events_kept={kept_events} "
+        f"max_events_per_group={max_events_per_group}",
+        file=sys.stderr,
+        flush=True,
+    )
     return [record.to_example() for record in records]
 
 

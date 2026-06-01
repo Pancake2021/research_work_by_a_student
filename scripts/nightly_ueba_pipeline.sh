@@ -16,6 +16,9 @@ Options:
   --backend NAME        model_bakeoff backend: vllm or transformers. Default: vllm.
   --limit N             Dev/test examples per bake-off run. Default: 200.
   --max-rows N          Max rows per CERT CSV file for dataset preparation.
+  --csv-chunksize N     Rows per pandas CSV chunk. Default: 100000.
+  --max-events-per-group N
+                        Max stored raw events per user/day group. Default: 300.
   --few-shot-k N        Few-shot examples for second bake-off run. Default: 3.
   --models "A B C"      Registry model keys. Default: qwen3/qwen2.5/smollm3/phi4.
   --setup-env           Run scripts/setup_uv_env.sh local cuda before experiments.
@@ -39,6 +42,8 @@ OUTPUT_ROOT="outputs/nightly"
 BACKEND="vllm"
 LIMIT="200"
 MAX_ROWS=""
+CSV_CHUNKSIZE="100000"
+MAX_EVENTS_PER_GROUP="300"
 FEW_SHOT_K="3"
 MODELS="qwen3_4b_instruct_2507 qwen2_5_3b_instruct smollm3_3b phi4_mini_instruct"
 SETUP_ENV=0
@@ -70,6 +75,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-rows)
       MAX_ROWS="$2"
+      shift 2
+      ;;
+    --csv-chunksize)
+      CSV_CHUNKSIZE="$2"
+      shift 2
+      ;;
+    --max-events-per-group)
+      MAX_EVENTS_PER_GROUP="$2"
       shift 2
       ;;
     --few-shot-k)
@@ -175,6 +188,8 @@ write_run_manifest() {
 - commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)
 - backend: $BACKEND
 - limit: $LIMIT
+- csv_chunksize: $CSV_CHUNKSIZE
+- max_events_per_group: $MAX_EVENTS_PER_GROUP
 - few_shot_k: $FEW_SHOT_K
 - models: $MODELS
 - synthetic_smoke: $SYNTHETIC_SMOKE
@@ -271,6 +286,8 @@ fi
 if [[ -n "$MAX_ROWS" ]]; then
   PREPARE_ARGS+=(--max-rows-per-file "$MAX_ROWS")
 fi
+PREPARE_ARGS+=(--csv-chunksize "$CSV_CHUNKSIZE")
+PREPARE_ARGS+=(--max-events-per-group "$MAX_EVENTS_PER_GROUP")
 run_step "02_prepare_dataset" python "${PREPARE_ARGS[@]}"
 
 log "Dataset summary:"

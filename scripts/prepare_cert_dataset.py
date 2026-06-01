@@ -23,6 +23,8 @@ def parse_args():
     parser.add_argument("--labels", help="Optional CSV/JSON/JSONL labels user/date -> risk_label")
     parser.add_argument("--output-dir", default="./outputs/cert_ueba_dataset")
     parser.add_argument("--max-rows-per-file", type=int)
+    parser.add_argument("--csv-chunksize", type=int, default=100_000)
+    parser.add_argument("--max-events-per-group", type=int, default=300)
     parser.add_argument("--min-events-per-group", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--synthetic-smoke", action="store_true", help="Write a tiny synthetic UEBA dataset")
@@ -43,6 +45,8 @@ def main():
             data_dir=args.data_dir,
             labels_path=args.labels,
             max_rows_per_file=args.max_rows_per_file,
+            csv_chunksize=args.csv_chunksize,
+            max_events_per_group=args.max_events_per_group,
             min_events_per_group=args.min_events_per_group,
         )
 
