@@ -61,6 +61,19 @@ def main():
     (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
+    empty_splits = [name for name, items in splits.items() if not items]
+    if not examples:
+        raise SystemExit(
+            "No UEBA scenarios were built from the input data. "
+            "Check --data-dir, CSV layout, column names, and --min-events-per-group."
+        )
+    if empty_splits:
+        raise SystemExit(
+            "Dataset split is empty for: "
+            + ", ".join(empty_splits)
+            + ". Need at least several users for train/dev/test split."
+        )
+
 
 def _synthetic_examples():
     normal = build_scenario_record(

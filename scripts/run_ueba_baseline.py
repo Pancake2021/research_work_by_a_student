@@ -33,6 +33,11 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     train = read_jsonl(args.train_jsonl)
     test = read_jsonl(args.test_jsonl)
+    if not train:
+        raise SystemExit(f"Train split is empty: {args.train_jsonl}")
+    if not test:
+        raise SystemExit(f"Test split is empty: {args.test_jsonl}")
+
     x_train, y_train = featurize(train)
     x_test, _ = featurize(test)
 

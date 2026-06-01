@@ -28,11 +28,23 @@ def load_cert_events(data_dir: str | Path, max_rows_per_file: int | None = None)
     import pandas as pd
 
     root = Path(data_dir)
+    if not root.exists():
+        raise FileNotFoundError(f"CERT data directory does not exist: {root}")
+
+    csv_paths = _find_cert_event_files(root)
+    missing = sorted(set(CERT_EVENT_FILES) - set(csv_paths))
+    if missing:
+        found = ", ".join(f"{event_type}={path}" for event_type, path in sorted(csv_paths.items()))
+        raise FileNotFoundError(
+            "CERT data directory does not contain required event CSV files. "
+            f"Missing: {', '.join(missing)}. Found: {found or 'none'}. "
+            "Expected files: logon.csv, device.csv, file.csv, email.csv, http.csv. "
+            "If Kaggle unpacked nested folders, pass the directory that contains those files "
+            "or keep using the current path after this recursive lookup fix."
+        )
+
     events: list[dict[str, Any]] = []
-    for event_type, filename in CERT_EVENT_FILES.items():
-        path = root / filename
-        if not path.exists():
-            continue
+    for event_type, path in csv_paths.items():
         frame = pd.read_csv(path, nrows=max_rows_per_file)
         for row in frame.to_dict(orient="records"):
             row = {str(key).lower(): value for key, value in row.items()}
@@ -41,6 +53,21 @@ def load_cert_events(data_dir: str | Path, max_rows_per_file: int | None = None)
             row["timestamp"] = row.get("date") or row.get("time") or row.get("timestamp") or ""
             events.append(row)
     return events
+
+
+def _find_cert_event_files(root: Path) -> dict[str, Path]:
+    """Find CERT event CSV files directly or in Kaggle/Figshare nested folders."""
+    found: dict[str, Path] = {}
+    for event_type, filename in CERT_EVENT_FILES.items():
+        direct = root / filename
+        if direct.exists():
+            found[event_type] = direct
+            continue
+
+        matches = sorted(root.rglob(filename))
+        if matches:
+            found[event_type] = matches[0]
+    return found
 
 
 def build_cert_scenarios(

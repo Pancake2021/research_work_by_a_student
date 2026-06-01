@@ -273,6 +273,9 @@ if [[ -n "$MAX_ROWS" ]]; then
 fi
 run_step "02_prepare_dataset" python "${PREPARE_ARGS[@]}"
 
+log "Dataset summary:"
+cat "$DATASET_DIR/summary.json" | tee -a "$MASTER_LOG"
+
 if [[ "$SKIP_BASELINES" -eq 0 ]]; then
   run_step "03_baseline_logreg" python scripts/run_ueba_baseline.py \
     --train-jsonl "$DATASET_DIR/train.jsonl" \
