@@ -7,6 +7,7 @@ cert_loader.py
 from __future__ import annotations
 
 import json
+import pickle
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -97,28 +98,114 @@ def build_cert_scenarios(
     csv_chunksize: int = 100_000,
     max_events_per_group: int = 300,
     min_events_per_group: int = 2,
+    checkpoint_path: str | Path | None = None,
+    resume_checkpoint: bool = False,
 ) -> list[dict[str, Any]]:
     """Создает prompt/response examples из CERT событий."""
-    label_map = load_label_map(labels_path) if labels_path else {}
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    total_events = 0
-    kept_events = 0
+    import pandas as pd
 
-    for event in iter_cert_events(
-        data_dir,
-        max_rows_per_file=max_rows_per_file,
-        csv_chunksize=csv_chunksize,
-    ):
-        total_events += 1
-        user_id = str(event.get("user_id") or "")
-        timestamp = str(event.get("timestamp") or "")
-        date = timestamp[:10] if len(timestamp) >= 10 else "unknown"
-        if not user_id:
+    label_map = load_label_map(labels_path) if labels_path else {}
+    checkpoint = Path(checkpoint_path) if checkpoint_path else None
+    state = _load_build_checkpoint(checkpoint) if resume_checkpoint and checkpoint else None
+    if state:
+        grouped = defaultdict(list, state["grouped"])
+        total_events = int(state["total_events"])
+        kept_events = int(state["kept_events"])
+        rows_done_by_type = dict(state["rows_done_by_type"])
+        chunks_done_by_type = dict(state["chunks_done_by_type"])
+        completed_event_types = set(state.get("completed_event_types", []))
+        print(f"[cert_loader] resumed checkpoint={checkpoint}", file=sys.stderr, flush=True)
+    else:
+        grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+        total_events = 0
+        kept_events = 0
+        rows_done_by_type: dict[str, int] = {}
+        chunks_done_by_type: dict[str, int] = {}
+        completed_event_types: set[str] = set()
+
+    root = Path(data_dir)
+    if not root.exists():
+        raise FileNotFoundError(f"CERT data directory does not exist: {root}")
+    csv_paths = _find_cert_event_files(root)
+    missing = sorted(set(CERT_EVENT_FILES) - set(csv_paths))
+    if missing:
+        found = ", ".join(f"{event_type}={path}" for event_type, path in sorted(csv_paths.items()))
+        raise FileNotFoundError(
+            "CERT data directory does not contain required event CSV files. "
+            f"Missing: {', '.join(missing)}. Found: {found or 'none'}. "
+            "Expected files: logon.csv, device.csv, file.csv, email.csv, http.csv."
+        )
+
+    for event_type, path in csv_paths.items():
+        if event_type in completed_event_types:
+            print(f"[cert_loader] {event_type}: already complete", file=sys.stderr, flush=True)
             continue
-        key = (user_id, date)
-        if len(grouped[key]) < max_events_per_group:
-            grouped[key].append(event)
-            kept_events += 1
+        rows_done = rows_done_by_type.get(event_type, 0)
+        if max_rows_per_file is not None and rows_done >= max_rows_per_file:
+            print(f"[cert_loader] {event_type}: already complete rows={rows_done}", file=sys.stderr, flush=True)
+            completed_event_types.add(event_type)
+            continue
+
+        nrows = None if max_rows_per_file is None else max_rows_per_file - rows_done
+        skiprows = range(1, rows_done + 1) if rows_done else None
+        reader = pd.read_csv(path, nrows=nrows, chunksize=csv_chunksize, skiprows=skiprows)
+        total_rows_for_file = rows_done
+        for frame in reader:
+            if len(frame) == 0:
+                continue
+            chunk_index = chunks_done_by_type.get(event_type, 0) + 1
+            total_rows_for_file += len(frame)
+            print(
+                f"[cert_loader] {event_type}: chunk={chunk_index} rows={len(frame)} "
+                f"total={total_rows_for_file} file={path}",
+                file=sys.stderr,
+                flush=True,
+            )
+            for row in frame.to_dict(orient="records"):
+                event = {str(key).lower(): value for key, value in row.items()}
+                event["event_type"] = event_type
+                event["user_id"] = event.get("user") or event.get("userid") or event.get("user_id") or ""
+                event["timestamp"] = event.get("date") or event.get("time") or event.get("timestamp") or ""
+                total_events += 1
+                user_id = str(event.get("user_id") or "")
+                timestamp = str(event.get("timestamp") or "")
+                date = timestamp[:10] if len(timestamp) >= 10 else "unknown"
+                if not user_id:
+                    continue
+                key = (user_id, date)
+                if len(grouped[key]) < max_events_per_group:
+                    grouped[key].append(event)
+                    kept_events += 1
+
+            rows_done_by_type[event_type] = total_rows_for_file
+            chunks_done_by_type[event_type] = chunk_index
+            if checkpoint:
+                _save_build_checkpoint(
+                    checkpoint,
+                    {
+                        "version": 1,
+                        "grouped": dict(grouped),
+                        "total_events": total_events,
+                        "kept_events": kept_events,
+                        "rows_done_by_type": rows_done_by_type,
+                        "chunks_done_by_type": chunks_done_by_type,
+                        "completed_event_types": sorted(completed_event_types),
+                    },
+                )
+        completed_event_types.add(event_type)
+        if checkpoint:
+            _save_build_checkpoint(
+                checkpoint,
+                {
+                    "version": 1,
+                    "grouped": dict(grouped),
+                    "total_events": total_events,
+                    "kept_events": kept_events,
+                    "rows_done_by_type": rows_done_by_type,
+                    "chunks_done_by_type": chunks_done_by_type,
+                    "completed_event_types": sorted(completed_event_types),
+                },
+            )
 
     records: list[ScenarioRecord] = []
     for (user_id, date), group_events in grouped.items():
@@ -135,6 +222,24 @@ def build_cert_scenarios(
         flush=True,
     )
     return [record.to_example() for record in records]
+
+
+def _load_build_checkpoint(path: Path | None) -> dict[str, Any] | None:
+    if not path or not path.exists():
+        return None
+    with path.open("rb") as f:
+        state = pickle.load(f)
+    if state.get("version") != 1:
+        raise ValueError(f"Unsupported CERT checkpoint version: {state.get('version')}")
+    return state
+
+
+def _save_build_checkpoint(path: Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("wb") as f:
+        pickle.dump(state, f)
+    tmp_path.replace(path)
 
 
 def split_by_user(

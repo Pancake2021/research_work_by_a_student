@@ -19,6 +19,9 @@ Options:
   --csv-chunksize N     Rows per pandas CSV chunk. Default: 100000.
   --max-events-per-group N
                         Max stored raw events per user/day group. Default: 300.
+  --prepare-checkpoint PATH
+                        Reusable checkpoint for resumable CERT preparation.
+  --resume-prepare      Resume CERT preparation from --prepare-checkpoint.
   --few-shot-k N        Few-shot examples for second bake-off run. Default: 3.
   --models "A B C"      Registry model keys. Default: qwen3/qwen2.5/smollm3/phi4.
   --setup-env           Run scripts/setup_uv_env.sh local cuda before experiments.
@@ -44,6 +47,8 @@ LIMIT="200"
 MAX_ROWS=""
 CSV_CHUNKSIZE="100000"
 MAX_EVENTS_PER_GROUP="300"
+PREPARE_CHECKPOINT=""
+RESUME_PREPARE=0
 FEW_SHOT_K="3"
 MODELS="qwen3_4b_instruct_2507 qwen2_5_3b_instruct smollm3_3b phi4_mini_instruct"
 SETUP_ENV=0
@@ -84,6 +89,14 @@ while [[ $# -gt 0 ]]; do
     --max-events-per-group)
       MAX_EVENTS_PER_GROUP="$2"
       shift 2
+      ;;
+    --prepare-checkpoint)
+      PREPARE_CHECKPOINT="$2"
+      shift 2
+      ;;
+    --resume-prepare)
+      RESUME_PREPARE=1
+      shift
       ;;
     --few-shot-k)
       FEW_SHOT_K="$2"
@@ -190,6 +203,8 @@ write_run_manifest() {
 - limit: $LIMIT
 - csv_chunksize: $CSV_CHUNKSIZE
 - max_events_per_group: $MAX_EVENTS_PER_GROUP
+- prepare_checkpoint: ${PREPARE_CHECKPOINT:-none}
+- resume_prepare: $RESUME_PREPARE
 - few_shot_k: $FEW_SHOT_K
 - models: $MODELS
 - synthetic_smoke: $SYNTHETIC_SMOKE
@@ -288,6 +303,12 @@ if [[ -n "$MAX_ROWS" ]]; then
 fi
 PREPARE_ARGS+=(--csv-chunksize "$CSV_CHUNKSIZE")
 PREPARE_ARGS+=(--max-events-per-group "$MAX_EVENTS_PER_GROUP")
+if [[ -n "$PREPARE_CHECKPOINT" ]]; then
+  PREPARE_ARGS+=(--checkpoint-path "$PREPARE_CHECKPOINT")
+fi
+if [[ "$RESUME_PREPARE" -eq 1 ]]; then
+  PREPARE_ARGS+=(--resume-checkpoint)
+fi
 run_step "02_prepare_dataset" python "${PREPARE_ARGS[@]}"
 
 log "Dataset summary:"

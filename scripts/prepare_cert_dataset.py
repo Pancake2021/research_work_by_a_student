@@ -25,6 +25,8 @@ def parse_args():
     parser.add_argument("--max-rows-per-file", type=int)
     parser.add_argument("--csv-chunksize", type=int, default=100_000)
     parser.add_argument("--max-events-per-group", type=int, default=300)
+    parser.add_argument("--checkpoint-path", help="Pickle checkpoint for resumable CERT preparation")
+    parser.add_argument("--resume-checkpoint", action="store_true", help="Resume CERT preparation from checkpoint")
     parser.add_argument("--min-events-per-group", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--synthetic-smoke", action="store_true", help="Write a tiny synthetic UEBA dataset")
@@ -48,6 +50,8 @@ def main():
             csv_chunksize=args.csv_chunksize,
             max_events_per_group=args.max_events_per_group,
             min_events_per_group=args.min_events_per_group,
+            checkpoint_path=args.checkpoint_path,
+            resume_checkpoint=args.resume_checkpoint,
         )
 
     splits = split_by_user(examples, seed=args.seed)
