@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument("--backend", choices=["transformers", "vllm"], default="transformers")
     parser.add_argument("--max-model-len", type=int, default=4096, help="vLLM max_model_len safety cap")
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.85, help="vLLM GPU memory fraction")
+    parser.add_argument("--enforce-eager", action="store_true", help="Disable vLLM CUDA graph capture/warmup")
     parser.add_argument("--include-optional", action="store_true")
     parser.add_argument("--mock", action="store_true", help="Do not load models; emit deterministic mock responses")
     return parser.parse_args()
@@ -75,6 +76,7 @@ def main():
                         temperature=args.temperature,
                         max_model_len=args.max_model_len,
                         gpu_memory_utilization=args.gpu_memory_utilization,
+                        enforce_eager=args.enforce_eager,
                     )
                 else:
                     responses = run_transformers_model(
@@ -200,6 +202,7 @@ def run_vllm_model(
     temperature,
     max_model_len,
     gpu_memory_utilization,
+    enforce_eager,
 ):
     """Runs batched inference with vLLM for fast bake-off/evaluation."""
     from vllm import LLM, SamplingParams
@@ -211,6 +214,7 @@ def run_vllm_model(
         "dtype": "float16",
         "max_model_len": max_model_len,
         "gpu_memory_utilization": gpu_memory_utilization,
+        "enforce_eager": enforce_eager,
     }
     if model_cfg.get("vllm_quantization"):
         llm_kwargs["quantization"] = model_cfg["vllm_quantization"]
