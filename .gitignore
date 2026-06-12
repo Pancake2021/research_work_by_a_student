@@ -27,6 +27,15 @@ wandb/
 *.pt
 *.pth
 
+# Hugging Face cache
+.huggingface/
+
+# Secrets
+.env
+*.env.local
+**/kaggle.json
+**/hf.json
+
 # Logs
 *.log
 logs/
