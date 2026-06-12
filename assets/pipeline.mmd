@@ -1,0 +1,9 @@
+graph TD
+    A["CERT R4.2"] -->|"logon, file, email, http, device"| B["User/Day Window"]
+    B --> C["SOC Narrative Dataset"]
+    C --> D["Zero / Few-shot Bake-off"]
+    D --> E["SFT LoRA"]
+    E --> F["GRPO"]
+    F --> G["Multi-criteria Eval on dev_balanced_50"]
+    G --> H["Classification: Acc, F1, Recall"]
+    G --> I["SOC: Format, Grounding, Actionability"]
