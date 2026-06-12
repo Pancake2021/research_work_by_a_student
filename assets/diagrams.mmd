@@ -1,0 +1,25 @@
+%% SOC Narrative — Mermaid diagrams for the Habr article
+%% Paste these into https://mermaid.live or any Mermaid renderer
+
+%% --- Pipeline ---
+graph TD
+    A[(CERT R4.2)] -->|logon, file, email, http, device| B[User/Day Window]
+    B --> C[SOC Narrative Dataset]
+    C --> D[Zero / Few-shot Bake-off]
+    D --> E[SFT LoRA]
+    E --> F[GRPO]
+    F --> G[Multi-criteria Eval on dev_balanced_50]
+    G --> H[Classification: Acc, F1, Recall]
+    G --> I[SOC: Format, Grounding, Actionability]
+
+%% --- Errors Flowchart ---
+graph TD
+    S[Start H100] --> P1{Skewed dev set: first 100 are all malicious}
+    P1 -->|Create balanced subset| S1[dev_balanced_50: 25 normal + 25 malicious]
+    S1 --> P2{FP8 kernel: Ministral won't run}
+    P2 -->|Remove from timed slot| S2[Exclude Ministral]
+    S2 --> P3{SFT truncation: context 8192 cuts completions}
+    P3 -->|Increase context| S3[max_seq_length = 16384]
+    S3 --> P4{3-4 GPU DDP: crashes with SIGTERM}
+    P4 -->|Use confirmed config| S4[Run GRPO on 2 GPUs]
+    S4 --> F1[Full pipeline: SFT + GRPO ✅]
